@@ -6,6 +6,7 @@ import type { MenuCat, MenuProduct } from "@/lib/types";
 import "./admin.css";
 
 const rp = (n: number) => "Rp " + Math.round(n).toLocaleString("id-ID");
+const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? "";
 const CAM = (
   <svg viewBox="0 0 24 24" aria-hidden="true">
     <rect x="3" y="5" width="18" height="14" rx="3" />
@@ -33,10 +34,21 @@ export default function AdminApp() {
 
   // ---- auth ---------------------------------------------------------------
   const [authState, setAuthState] = useState<"checking" | "out" | "in">("checking");
-  const [email, setEmail] = useState("");
-  const [pw, setPw] = useState("");
-  const [authErr, setAuthErr] = useState("");
-  const [authBusy, setAuthBusy] = useState(false);
+
+  // ---- PIN ----------------------------------------------------------------
+  const [pin, setPin] = useState("");
+  const [pinMsg, setPinMsg] = useState("");
+  const [pinShake, setPinShake] = useState(false);
+  const [fails, setFails] = useState(0);
+  const [lockUntil, setLockUntil] = useState(0);
+  const [lockLeft, setLockLeft] = useState(0);
+  const pinBusyRef = useRef(false);
+  const [pinSheetOpen, setPinSheetOpen] = useState(false);
+  const [oldPin, setOldPin] = useState("");
+  const [newPin1, setNewPin1] = useState("");
+  const [newPin2, setNewPin2] = useState("");
+  const [pinErr, setPinErr] = useState("");
+  const [pinSaving, setPinSaving] = useState(false);
 
   // ---- data ---------------------------------------------------------------
   const [cats, setCats] = useState<MenuCat[]>([]);
@@ -140,14 +152,104 @@ export default function AdminApp() {
     }
   }, [authState, load]);
 
-  async function login(e: React.FormEvent) {
-    e.preventDefault();
-    if (!supabase) return;
-    setAuthBusy(true);
-    setAuthErr("");
-    const { error } = await supabase.auth.signInWithPassword({ email, password: pw });
-    if (error) setAuthErr(error.message);
-    setAuthBusy(false);
+  // ---- PIN login ----------------------------------------------------------
+  function pressKey(k: string) {
+    if (pinBusyRef.current || Date.now() < lockUntil) return;
+    if (k === "del") {
+      setPin((p) => p.slice(0, -1));
+      return;
+    }
+    setPin((p) => (p.length < 6 ? p + k : p));
+  }
+
+  async function tryLogin(code: string) {
+    const db = supabase;
+    if (!db) return;
+    if (!ADMIN_EMAIL) {
+      setPinMsg("NEXT_PUBLIC_ADMIN_EMAIL belom diset di .env.local");
+      setPin("");
+      return;
+    }
+    if (Date.now() < lockUntil) {
+      setPin("");
+      return;
+    }
+    pinBusyRef.current = true;
+    const { error } = await db.auth.signInWithPassword({ email: ADMIN_EMAIL, password: code });
+    pinBusyRef.current = false;
+    setPin("");
+    if (error) {
+      setPinShake(true);
+      setTimeout(() => setPinShake(false), 500);
+      const f = fails + 1;
+      setFails(f);
+      if (f >= 5) {
+        setFails(0);
+        setLockUntil(Date.now() + 30000);
+      }
+    } else {
+      setFails(0);
+      setLockUntil(0);
+      setPinMsg("");
+    }
+  }
+
+  useEffect(() => {
+    if (pin.length === 6 && !pinBusyRef.current) tryLogin(pin);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pin]);
+
+  useEffect(() => {
+    if (authState !== "out") return;
+    const onKey = (e: KeyboardEvent) => {
+      if (/^[0-9]$/.test(e.key)) pressKey(e.key);
+      else if (e.key === "Backspace") pressKey("del");
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authState, lockUntil]);
+
+  useEffect(() => {
+    if (!lockUntil) {
+      setLockLeft(0);
+      return;
+    }
+    const t = setInterval(() => {
+      const left = Math.ceil((lockUntil - Date.now()) / 1000);
+      setLockLeft(left > 0 ? left : 0);
+      if (left <= 0) clearInterval(t);
+    }, 400);
+    return () => clearInterval(t);
+  }, [lockUntil]);
+
+  // ---- ganti PIN ----------------------------------------------------------
+  async function savePin() {
+    const db = supabase;
+    if (!db || pinSaving) return;
+    setPinErr("");
+    if (!/^\d{6}$/.test(oldPin)) return setPinErr("PIN lama harus 6 angka.");
+    if (!/^\d{6}$/.test(newPin1)) return setPinErr("PIN baru harus 6 angka.");
+    if (newPin1 !== newPin2) return setPinErr("Ulangi PIN belum sama.");
+    if (!ADMIN_EMAIL) return setPinErr("NEXT_PUBLIC_ADMIN_EMAIL belom diset di .env.local.");
+    setPinSaving(true);
+    const check = await db.auth.signInWithPassword({ email: ADMIN_EMAIL, password: oldPin });
+    if (check.error) {
+      setPinSaving(false);
+      setPinErr("PIN lama salah.");
+      return;
+    }
+    const { error } = await db.auth.updateUser({ password: newPin1 });
+    setPinSaving(false);
+    if (error) {
+      setPinErr(error.message);
+      return;
+    }
+    setOldPin("");
+    setNewPin1("");
+    setNewPin2("");
+    setPinSheetOpen(false);
+    toast("PIN berhasil diganti");
   }
 
   // ---- indicator & filter switching (port moveInd) -------------------------
@@ -396,38 +498,42 @@ export default function AdminApp() {
   }
 
   if (authState === "out") {
+    const locked = lockLeft > 0;
     return (
-      <div className="auth">
-        <form className="card" onSubmit={login}>
-          <div className="brand">K Gaming</div>
-          <h1>Masuk Admin</h1>
-          <label className="fld">
-            Email
-            <input
-              type="email"
-              required
-              autoComplete="username"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@kgaming.id"
-            />
-          </label>
-          <label className="fld">
-            Password
-            <input
-              type="password"
-              required
-              autoComplete="current-password"
-              value={pw}
-              onChange={(e) => setPw(e.target.value)}
-              placeholder="••••••••"
-            />
-          </label>
-          {authErr && <div className="err">{authErr}</div>}
-          <button className="go" disabled={authBusy}>
-            {authBusy ? "Memeriksa…" : "Masuk"}
-          </button>
-        </form>
+      <div className="pin-wrap">
+        <div className="pin-card">
+          <div className="pin-brand">K Gaming</div>
+          <h1 className="pin-title">Masuk Admin</h1>
+          <div className={`pin-dots ${pinShake ? "err" : ""}`}>
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <span key={i} className={`pin-dot ${i < pin.length ? "on" : ""}`} />
+            ))}
+          </div>
+          <div className="pin-lock">
+            {locked
+              ? `Coba lagi dalam ${lockLeft} detik`
+              : fails
+                ? "PIN salah"
+                : pinMsg || "\u00A0"}
+          </div>
+          <div className="keypad">
+            {["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "del"].map((k, i) =>
+              k === "" ? (
+                <span key={i} className="key ghost" />
+              ) : (
+                <button
+                  key={i}
+                  className="key"
+                  disabled={locked}
+                  onClick={() => pressKey(k)}
+                >
+                  {k === "del" ? "⌫" : k}
+                </button>
+              ),
+            )}
+          </div>
+          <div className="pin-hint">Masuk sekali, gak usah login lagi</div>
+        </div>
       </div>
     );
   }
@@ -450,6 +556,17 @@ export default function AdminApp() {
           <div className="brand">K Gaming</div>
           <div className="who">
             Admin
+            <button
+              onClick={() => {
+                setPinErr("");
+                setOldPin("");
+                setNewPin1("");
+                setNewPin2("");
+                setPinSheetOpen(true);
+              }}
+            >
+              Ganti PIN
+            </button>
             <button onClick={() => supabase?.auth.signOut()}>Keluar</button>
           </div>
         </div>
@@ -654,6 +771,56 @@ export default function AdminApp() {
             {delArmed ? "Yakin hapus? Tekan sekali lagi" : "Hapus menu"}
           </button>
         )}
+      </section>
+
+      {/* sheet ganti PIN */}
+      <section
+        className={`sheet ${pinSheetOpen ? "open" : ""}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pinTitle"
+      >
+        <div className="grip" />
+        <h2 id="pinTitle">Ganti PIN</h2>
+        <div className="form">
+          <label className="fld">
+            PIN lama
+            <input
+              type="password"
+              inputMode="numeric"
+              maxLength={6}
+              value={oldPin}
+              onChange={(e) => setOldPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              placeholder="••••••"
+            />
+          </label>
+          <label className="fld">
+            PIN baru
+            <input
+              type="password"
+              inputMode="numeric"
+              maxLength={6}
+              value={newPin1}
+              onChange={(e) => setNewPin1(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              placeholder="6 angka"
+            />
+          </label>
+          <label className="fld">
+            Ulangi PIN baru
+            <input
+              type="password"
+              inputMode="numeric"
+              maxLength={6}
+              value={newPin2}
+              onChange={(e) => setNewPin2(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              placeholder="6 angka"
+            />
+          </label>
+          {pinErr && <div className="err">{pinErr}</div>}
+        </div>
+        <button className="go" onClick={savePin} disabled={pinSaving}>
+          {pinSaving ? "Menyimpan…" : "Simpan PIN"}
+        </button>
       </section>
     </div>
   );

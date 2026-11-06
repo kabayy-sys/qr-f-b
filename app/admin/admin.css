@@ -632,3 +632,105 @@ h1 {
   padding: 28px 0;
   color: var(--muted);
 }
+
+/* Login PIN */
+.pin-wrap {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.pin-card {
+  display: grid;
+  gap: 20px;
+  justify-items: center;
+  animation: rise .7s var(--ease) both;
+}
+
+.pin-brand {
+  font: 800 18px "Bricolage Grotesque", sans-serif;
+  letter-spacing: -.02em;
+  color: var(--muted);
+}
+
+.pin-title {
+  font: 700 30px "Bricolage Grotesque", sans-serif;
+  letter-spacing: -.03em;
+  margin: 0;
+}
+
+.pin-dots {
+  display: flex;
+  gap: 14px;
+  margin-top: 6px;
+}
+
+.pin-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--line);
+  transition: background .25s var(--spring), transform .25s var(--spring);
+}
+
+.pin-dot.on {
+  background: var(--blue);
+  transform: scale(1.15);
+}
+
+.pin-dots.err {
+  animation: shake .45s var(--ease);
+}
+
+@keyframes shake {
+  0%, 100% { transform: none; }
+  20% { transform: translateX(-10px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(3px); }
+}
+
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 76px);
+  gap: 12px;
+}
+
+.key {
+  height: 72px;
+  border-radius: 24px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font: 600 24px "Bricolage Grotesque", sans-serif;
+  display: grid;
+  place-items: center;
+  transition: transform .15s var(--ease), background .2s;
+}
+
+.key:active {
+  transform: scale(.92);
+  background: var(--bg);
+}
+
+.key:disabled {
+  opacity: .35;
+}
+
+.key.ghost {
+  border: 0;
+  background: none;
+}
+
+.pin-lock {
+  min-height: 18px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--danger);
+  text-align: center;
+}
+
+.pin-hint {
+  font-size: 13px;
+  color: var(--muted);
+}
