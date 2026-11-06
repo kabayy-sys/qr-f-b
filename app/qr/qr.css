@@ -1,0 +1,86 @@
+/* Halaman generator QR meja */
+
+.qr-wrap {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 32px 22px;
+}
+
+.qr-head h1 {
+  font: 700 30px/1.1 "Bricolage Grotesque", sans-serif;
+  letter-spacing: -.03em;
+  margin: 0 0 6px;
+}
+
+.qr-head p {
+  font-size: 13px;
+  margin: 0 0 20px;
+}
+
+.qr-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.qr-card {
+  margin: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 16px;
+  text-align: center;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+}
+
+.qr-label {
+  font: 700 17px "Bricolage Grotesque", sans-serif;
+  letter-spacing: -.02em;
+}
+
+.qr-code {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--bg);
+  border-radius: 999px;
+  padding: 3px 12px;
+}
+
+.qr-img {
+  width: 180px;
+  height: 180px;
+  border-radius: 12px;
+}
+
+.qr-url {
+  font-size: 10px;
+  color: var(--muted);
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+/* Cetak sticker: 2 kartu per baris, jangan kepotong halaman */
+@media print {
+  .qr-head p {
+    display: none;
+  }
+
+  .qr-wrap {
+    max-width: none;
+    padding: 8mm;
+  }
+
+  .qr-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8mm;
+  }
+
+  .qr-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    border: 1px dashed #999;
+  }
+}
